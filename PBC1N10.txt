@@ -1,0 +1,199 @@
+      *----------------------------------------------------------------*
+       IDENTIFICATION DIVISION.
+      *----------------------------------------------------------------*
+       PROGRAM-ID. PBC1N10.
+       AUTHOR. JOSE ANTONIO FERNANDEZ.
+      *
+      * Programa que procesa un fichero con cantidades monetarias en euros
+      * y calcula su equivalencia en pesetas.
+      *----------------------------------------------------------------*
+       ENVIRONMENT DIVISION.
+      *----------------------------------------------------------------*
+       CONFIGURATION SECTION.
+       SPECIAL-NAMES.
+           DECIMAL-POINT IS COMMA.
+       INPUT-OUTPUT SECTION.
+       FILE-CONTROL.
+           SELECT ENTRADA
+                  ASSIGN ENTJCL
+                  ORGANIZATION IS SEQUENTIAL
+                  ACCESS MODE IS SEQUENTIAL
+                  FILE STATUS FS-ENTRADA.
+           SELECT SALIDA
+                  ASSIGN SALJCL
+                  ORGANIZATION IS SEQUENTIAL
+                  ACCESS MODE IS SEQUENTIAL
+                  FILE STATUS FS-SALIDA.
+      *----------------------------------------------------------------*
+       DATA DIVISION.
+      *----------------------------------------------------------------*
+       FILE SECTION.
+       FD  ENTRADA
+           LABEL RECORD IS STANDARD
+           BLOCK CONTAINS 0 RECORDS
+           RECORDING MODE IS F
+           DATA RECORD IS REG-ENTRADA.
+       01  REG-ENTRADA           PIC X(60).
+       FD  SALIDA
+           LABEL RECORD IS STANDARD
+           BLOCK CONTAINS 0 RECORDS
+           RECORDING MODE IS F
+           DATA RECORD IS REG-SALIDA.
+       01  REG-SALIDA            PIC X(60).
+
+       WORKING-STORAGE SECTION.
+       01  WS-CONTANTES.
+           05 CTE-NOMPGM         PIC X(7)  VALUE 'PBC1N10'.
+           05 CTE-PBC1M98        PIC X(7)  VALUE 'PBC1M98'.
+       01  WS-VARIABLES.
+           05 AUX-TITULO         PIC X(60) VALUE SPACES.
+           05 FS-ENTRADA         PIC 9(2)  VALUE ZEROES.
+           05 FS-SALIDA          PIC 9(2)  VALUE ZEROES.
+           05 IN-ENTRADA-REG.
+              10 IN-AMOUNT-PTA   PIC 9(15)      VALUE ZEROES.
+              10 FILLER          PIC X(45)      VALUE SPACES.
+           05 OU-SALIDA-REG.
+              10 OU-AMOUNT-PTA   PIC 9(15)      VALUE ZEROES.
+              10 FILLER          PIC X          VALUE SPACES.
+              10 OU-IGUAL        PIC X          VALUE SPACES.
+              10 FILLER          PIC X          VALUE SPACES.
+              10 OU-AMOUNT-EUR   PIC 9(13)V9(2)  VALUE ZEROES.
+              10 FILLER          PIC X(26)      VALUE SPACES.
+           05 WS-PBC1M98.
+              10 WS-PESETAS      PIC 9(15)      VALUE ZEROES.
+              10 WS-EUROS        PIC 9(13)V9(2)  VALUE ZEROES.
+              10 WS-FLAG         PIC X(2)       VALUE SPACES.
+       01  CONTADORES.
+           05 CTR-LEIDOS         PIC 9(2).
+           05 CTR-GRABADOS       PIC 9(2).
+       01  SWITCHES.
+           05 SW-ENTRADA         PIC X     VALUE 'N'.
+              88 END-ENTRADA               VALUE 'Y'.
+           05 SW-VACIO           PIC X     VALUE 'N'.
+              88 YES-VACIO                 VALUE 'Y'.
+
+      *----------------------------------------------------------------*
+       PROCEDURE DIVISION.
+      *----------------------------------------------------------------*
+           PERFORM 1000-INICIO
+           PERFORM 2000-PROCESS UNTIL END-ENTRADA
+           PERFORM 3000-END
+           .
+
+      *------------*
+       1000-INICIO.
+      *------------*
+           INITIALIZE CONTADORES
+
+           PERFORM 1100-ABRIR-FICHEROS
+
+           PERFORM 2100-LEER
+           IF END-ENTRADA
+              SET YES-VACIO TO TRUE
+           END-IF
+
+           STRING '             ' DELIMITED BY SIZE
+                  '** Traducci n de euros a pesetas **'
+                                  DELIMITED BY SIZE
+             INTO AUX-TITULO
+           END-STRING
+           WRITE REG-SALIDA FROM AUX-TITULO
+           .
+
+       1100-ABRIR-FICHEROS.
+           OPEN INPUT ENTRADA
+           IF FS-ENTRADA NOT = ZEROES
+              DISPLAY 'ERROR AL ABRIR ENTRARA:' FS-ENTRADA
+              PERFORM 9990-CANCELAR
+           END-IF
+
+           OPEN OUTPUT SALIDA
+           IF FS-SALIDA NOT = ZEROES
+              DISPLAY 'ERROR AL ABRIR SSALIDA: ' FS-SALIDA
+              PERFORM 9990-CANCELAR
+           END-IF
+           .
+
+      *------------*
+       2000-PROCESS.
+      *------------*
+           PERFORM 2050-ASIGNAR
+           WRITE REG-SALIDA FROM OU-SALIDA-REG
+           IF FS-SALIDA NOT = ZEROES
+              DISPLAY 'ERROR AL GRABAR FICHERO SALIDA: ' FS-SALIDA
+              PERFORM 9990-CANCELAR
+           ELSE
+              ADD 1 TO CTR-GRABADOS
+           END-IF
+
+           PERFORM 2100-LEER
+           IF FS-ENTRADA = 10
+              SET END-ENTRADA TO TRUE
+           END-IF
+           .
+
+       2050-ASIGNAR.
+           INITIALIZE OU-SALIDA-REG
+
+           MOVE IN-AMOUNT-PTA TO OU-AMOUNT-PTA
+           MOVE '='           TO OU-IGUAL
+
+           CALL CTE-PBC1M98 USING WS-PBC1M98
+
+           EVALUATE WS-FLAG OF WS-PBC1M98
+               WHEN 'OK'
+                 MOVE WS-EUROS OF WS-PBC1M98 TO OU-AMOUNT-EUR
+               WHEN 'KO'
+                 MOVE 9999999,99            TO OU-AMOUNT-EUR
+               WHEN OTHER
+                 MOVE 8888888,88            TO OU-AMOUNT-EUR
+           END-EVALUATE
+           .
+
+       2100-LEER.
+           READ ENTRADA INTO IN-ENTRADA-REG
+             AT END
+                SET END-ENTRADA TO TRUE
+             NOT AT END
+                ADD 1 TO CTR-LEIDOS
+           END-READ
+
+           IF FS-ENTRADA NOT EQUAL ZEROES AND 10
+              DISPLAY 'ERROR AL LEER ENTRADA: ' FS-ENTRADA
+              PERFORM 9990-CANCELAR
+           END-IF
+           .
+
+      *------------*
+       3000-END.
+      *------------*
+           IF YES-VACIO
+              DISPLAY 'FICHERO DE ENTRADA VAC O'
+           END-IF
+
+           CLOSE ENTRADA
+           IF FS-ENTRADA NOT = ZEROES
+              DISPLAY 'ERROR AL CERRAR ENTRADA: ' FS-ENTRADA
+           END-IF
+
+           CLOSE SALIDA
+           IF FS-SALIDA    NOT = ZEROES
+              DISPLAY 'ERROR AL CERRAR SALIDA   : ' FS-SALIDA
+           END-IF
+
+           DISPLAY 'CONTADOR LEIDOS  : ' CTR-LEIDOS
+           DISPLAY 'CONTADOR GRABADOS: ' CTR-GRABADOS
+
+           STOP RUN.
+
+      *------------*
+       9990-CANCELAR.
+      *------------*
+           DISPLAY '************************************'
+           DISPLAY ' SE CANCELA EL PROGRAMA Y LA CADENA '
+           DISPLAY '************************************'
+           DISPLAY ' REGISTROS LEIDOS  : ' CTR-LEIDOS
+           DISPLAY ' REGISTROS GRABADOS: ' CTR-GRABADOS
+           CLOSE ENTRADA SALIDA
+           MOVE 1001 TO RETURN-CODE
+           STOP RUN.
